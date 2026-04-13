@@ -1,35 +1,45 @@
-use std::path::Path;
-use tokio::fs;
-use std::process::Stdio;
-use tokio::process::Command;
+// crates/voltacode-core/src/bridge.rs
+use crate::llm::{LlmClient, Message, Role};
+use crate::tools::ToolRegistry;
+use tokio::sync::mpsc::Sender;
 
-pub struct SystemBridge;
+pub struct AgentBridge<'a> {
+    client: &'a dyn LlmClient,
+    registry: ToolRegistry,
+}
 
-impl SystemBridge {
-    pub async fn read_file(path: impl AsRef<Path>) -> Result<String, std::io::Error> {
-        fs::read_to_string(path).await
+impl<'a> AgentBridge<'a> {
+    pub fn new(client: &'a dyn LlmClient, registry: ToolRegistry) -> Self {
+        Self { client, registry }
     }
 
-    pub async fn write_file(path: impl AsRef<Path>, content: &str) -> Result<(), std::io::Error> {
-        if let Some(parent) = path.as_ref().parent() {
-            fs::create_dir_all(parent).await?;
-        }
-        fs::write(path, content).await
-    }
+    pub async fn execute(
+        &self,
+        prompt: &str,
+        tx: Sender<String>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut messages = vec![Message {
+            role: Role::User,
+            content: prompt.to_string(),
+        }];
 
-    pub async fn execute_bash(cmd: &str) -> Result<(String, String, bool), std::io::Error> {
-        let output = Command::new("bash")
-            .arg("-c")
-            .arg(cmd)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .await?;
-
-        Ok((
-            String::from_utf8_lossy(&output.stdout).to_string(),
-            String::from_utf8_lossy(&output.stderr).to_string(),
-            output.status.success()
+        let schemas = self.registry.get_schemas();
+        tx.send(format!(
+            "[System] Agent initialized with {} tools.",
+            schemas.len()
         ))
+        .await
+        .ok();
+
+        // LLM multi-turn execution loop stub
+        let response = self.client.completion(&messages).await?;
+
+        // TODO: Phase 4.1 - Parse response for tool execution schemas
+        // self.registry.execute(name, args).await;
+        // messages.push(ToolResult);
+
+        tx.send(response).await.ok();
+
+        Ok(())
     }
 }

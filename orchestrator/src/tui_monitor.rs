@@ -13,7 +13,9 @@ use ratatui::{
 };
 use std::{io, time::Duration};
 use tokio::sync::mpsc;
-use voltacode_core::llm::{anthropic::AnthropicClient, LlmClient, Message, Role};
+use voltacode_core::bridge::AgentBridge;
+use voltacode_core::llm::anthropic::AnthropicClient;
+use voltacode_core::tools::{bash::ExecuteBashTool, fs::{ReadFileTool, WriteFileTool}, ToolRegistry};
 
 struct AppState {
     input: String,
@@ -102,15 +104,17 @@ async fn run_event_loop<B: Backend>(terminal: &mut Terminal<B>, app: &mut AppSta
                         let tx_clone = tx.clone();
                         tokio::spawn(async move {
                             let client = AnthropicClient::new();
-                            let msg = vec![Message { role: Role::User, content: prompt }];
+                            let mut registry = ToolRegistry::new();
 
-                            // Consumes non-Send `e` before the tx_clone await point
-                            let result_msg = match client.completion(&msg).await {
-                                Ok(res) => res,
-                                Err(e) => format!("Error: {}", e),
-                            };
+                            registry.register(Box::new(ReadFileTool));
+                            registry.register(Box::new(WriteFileTool));
+                            registry.register(Box::new(ExecuteBashTool));
 
-                            tx_clone.send(result_msg).await.ok();
+                            let bridge = AgentBridge::new(&client, registry);
+
+                            if let Err(e) = bridge.execute(&prompt, tx_clone.clone()).await {
+                                tx_clone.send(format!("Error: {}", e)).await.ok();
+                            }
                         });
                     }
                     _ => {}
