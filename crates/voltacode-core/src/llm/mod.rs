@@ -1,6 +1,7 @@
 // crates/voltacode-core/src/llm/mod.rs
 pub mod anthropic;
 pub mod openai;
+pub mod ollama;
 
 
 use async_trait::async_trait;

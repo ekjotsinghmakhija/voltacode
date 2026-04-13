@@ -2,20 +2,27 @@
 mod render;
 
 use clap::Parser;
+use dialoguer::{theme::ColorfulTheme, Select};
 use render::{Spinner, TerminalRenderer};
 use std::io::{self, Write};
-use voltacode_core::llm::{anthropic::AnthropicClient, openai::OpenAiClient, LlmClient, Message, Role};
+use voltacode_core::llm::{
+    anthropic::AnthropicClient, ollama::OllamaClient, openai::OpenAiClient, LlmClient, Message,
+    Role,
+};
 
 #[derive(Parser, Debug)]
-#[command(name = "voltacode", about = "High-performance intelligent coding agent")]
+#[command(
+    name = "voltacode",
+    about = "High-performance intelligent coding agent"
+)]
 struct Cli {
     /// One-shot prompt to execute without entering REPL
     #[arg(short, long)]
     prompt: Option<String>,
 
-    /// Specify LLM provider (anthropic, openai)
-    #[arg(long, default_value = "anthropic")]
-    provider: String,
+    /// Specify LLM provider (anthropic, openai, ollama)
+    #[arg(long)]
+    provider: Option<String>,
 
     /// Specify model identifier
     #[arg(short, long)]
@@ -28,9 +35,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = TerminalRenderer::new();
     let mut stdout = io::stdout();
 
-    let client: Box<dyn LlmClient> = match cli.provider.as_str() {
-        "openai" => Box::new(OpenAiClient::new()),
-        _ => Box::new(AnthropicClient::new()),
+    let client: Box<dyn LlmClient> = if let Some(provider) = cli.provider {
+        match provider.as_str() {
+            "openai" => Box::new(OpenAiClient::new()),
+            "ollama" => Box::new(OllamaClient::new(
+                cli.model
+                    .unwrap_or_else(|| "deepseek-coder:6.7b".to_string()),
+            )),
+            _ => Box::new(AnthropicClient::new()),
+        }
+    } else {
+        let providers = vec![
+            "Anthropic (Online - Claude 3.5 Sonnet)",
+            "OpenAI (Online - GPT-4o)",
+            "Ollama (Local Models)",
+        ];
+
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Select model to run")
+            .default(0)
+            .items(&providers)
+            .interact()?;
+
+        match selection {
+            0 => Box::new(AnthropicClient::new()),
+            1 => Box::new(OpenAiClient::new()),
+            2 => {
+                let local_models = vec!["deepseek-coder:6.7b", "llama3.1", "qwen2.5-coder:7b"];
+                let model_idx = Select::with_theme(&ColorfulTheme::default())
+                    .with_prompt("Select local model")
+                    .default(0)
+                    .items(&local_models)
+                    .interact()?;
+                Box::new(OllamaClient::new(local_models[model_idx].to_string()))
+            }
+            _ => unreachable!(),
+        }
     };
 
     if let Some(prompt_text) = cli.prompt {
