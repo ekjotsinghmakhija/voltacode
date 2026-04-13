@@ -1,0 +1,9 @@
+{
+  "project_name": "Voltacode",
+  "phase": 0,
+  "inference_mode": "online",
+  "sandbox": {
+    "network_airgap": true,
+    "memory_limit_mb": 19238
+  }
+}

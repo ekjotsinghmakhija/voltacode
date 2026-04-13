@@ -1,0 +1,14 @@
+{
+  "name": "voltacode-orchestrator",
+  "version": "1.0.0",
+  "description": "Auxiliary AST parsing scripts for Voltacode clean-room extraction",
+  "author": "Ekjot Singh",
+  "scripts": {
+    "start": "bun run extract.ts"
+  },
+  "dependencies": {
+    "tree-sitter": "^0.20.1",
+    "tree-sitter-rust": "^0.20.4",
+    "tree-sitter-python": "^0.20.4"
+  }
+}
