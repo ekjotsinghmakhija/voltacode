@@ -1,8 +1,10 @@
 // crates/voltacode-cli/src/main.rs
 mod render;
+mod input;
 
 use clap::Parser;
 use dialoguer::{theme::ColorfulTheme, Select};
+use input::{LineEditor, ReadOutcome};
 use render::{Spinner, TerminalRenderer};
 use std::io::{self, Write};
 use voltacode_core::llm::{
@@ -73,7 +75,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    if let Some(prompt_text) = cli.prompt {
+if let Some(prompt_text) = cli.prompt {
         execute_prompt(&prompt_text, &*client, &renderer, &mut stdout).await?;
         return Ok(());
     }
@@ -81,23 +83,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("⚡ Voltacode REPL ⚡");
     println!("Type /exit to quit.");
 
+    let mut editor = LineEditor::new("> ");
+
     loop {
-        print!("> ");
-        stdout.flush()?;
+        match editor.read_line()? {
+            ReadOutcome::Submit(input) => {
+                let trimmed = input.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
 
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        let trimmed = input.trim();
+                if trimmed == "/exit" || trimmed == "/quit" {
+                    break;
+                }
 
-        if trimmed.is_empty() {
-            continue;
+                execute_prompt(trimmed, &*client, &renderer, &mut stdout).await?;
+            }
+            ReadOutcome::Cancel => continue,
+            ReadOutcome::Exit => break,
         }
-
-        if trimmed == "/exit" || trimmed == "/quit" {
-            break;
-        }
-
-        execute_prompt(trimmed, &*client, &renderer, &mut stdout).await?;
     }
 
     Ok(())
