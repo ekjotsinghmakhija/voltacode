@@ -1,4 +1,3 @@
-// orchestrator/Cargo.toml
 [package]
 name = "voltacode-orchestrator"
 version = "0.1.0"
