@@ -3,6 +3,7 @@ mod render;
 mod input;
 
 use clap::Parser;
+use crossterm::style::Stylize;
 use dialoguer::{theme::ColorfulTheme, Select};
 use input::{LineEditor, ReadOutcome};
 use render::{Spinner, TerminalRenderer};
@@ -12,15 +13,12 @@ use voltacode_core::llm::{anthropic::AnthropicClient, ollama::OllamaClient, open
 #[derive(Parser, Debug)]
 #[command(name = "voltacode", about = "High-performance intelligent coding agent")]
 struct Cli {
-    /// One-shot prompt to execute without entering REPL
     #[arg(short, long)]
     prompt: Option<String>,
 
-    /// Specify LLM provider (anthropic, openai, ollama)
     #[arg(long)]
     provider: Option<String>,
 
-    /// Specify model identifier
     #[arg(short, long)]
     model: Option<String>,
 }
@@ -31,11 +29,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = TerminalRenderer::new();
     let mut stdout = io::stdout();
 
-    let client: Box<dyn LlmClient> = if let Some(provider) = cli.provider {
+    let (client, provider_name): (Box<dyn LlmClient>, String) = if let Some(provider) = cli.provider {
         match provider.as_str() {
-            "openai" => Box::new(OpenAiClient::new()),
-            "ollama" => Box::new(OllamaClient::new(cli.model.unwrap_or_else(|| "deepseek-coder:6.7b".to_string()))),
-            _ => Box::new(AnthropicClient::new()),
+            "openai" => (Box::new(OpenAiClient::new()), "OpenAI".to_string()),
+            "ollama" => {
+                let m = cli.model.unwrap_or_else(|| "deepseek-coder:6.7b".to_string());
+                (Box::new(OllamaClient::new(m.clone())), format!("Ollama ({})", m))
+            },
+            _ => (Box::new(AnthropicClient::new()), "Anthropic".to_string()),
         }
     } else {
         let providers = vec![
@@ -51,8 +52,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .interact()?;
 
         match selection {
-            0 => Box::new(AnthropicClient::new()),
-            1 => Box::new(OpenAiClient::new()),
+            0 => (Box::new(AnthropicClient::new()), "Anthropic".to_string()),
+            1 => (Box::new(OpenAiClient::new()), "OpenAI".to_string()),
             2 => {
                 let local_models = vec!["deepseek-coder:6.7b", "llama3.1", "qwen2.5-coder:7b"];
                 let model_idx = Select::with_theme(&ColorfulTheme::default())
@@ -60,7 +61,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .default(0)
                     .items(&local_models)
                     .interact()?;
-                Box::new(OllamaClient::new(local_models[model_idx].to_string()))
+                let m = local_models[model_idx].to_string();
+                (Box::new(OllamaClient::new(m.clone())), format!("Ollama ({})", m))
             },
             _ => unreachable!(),
         }
@@ -71,8 +73,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    println!("⚡ Voltacode REPL ⚡");
-    println!("Type /exit to quit.");
+    println!("{}", "╭──────────────────────────────────────────────────╮".with(crossterm::style::Color::DarkGrey));
+    println!("{} {} {}",
+        "│".with(crossterm::style::Color::DarkGrey),
+        "⚡ VOLTACODE AGENT - CLEAN ROOM ORCHESTRATOR ⚡ ".with(crossterm::style::Color::Cyan),
+        "│".with(crossterm::style::Color::DarkGrey)
+    );
+    println!("{}", "├──────────────────────────────────────────────────┤".with(crossterm::style::Color::DarkGrey));
+    println!("{} {:<48} {}",
+        "│".with(crossterm::style::Color::DarkGrey),
+        format!("Provider: {}", provider_name).with(crossterm::style::Color::Yellow),
+        "│".with(crossterm::style::Color::DarkGrey)
+    );
+    println!("{}", "╰──────────────────────────────────────────────────╯\n".with(crossterm::style::Color::DarkGrey));
+    println!("Type /exit to quit.\n");
 
     let mut editor = LineEditor::new("> ");
 
@@ -105,7 +119,7 @@ async fn execute_prompt(
     stdout: &mut std::io::Stdout,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut spinner = Spinner::new();
-    spinner.tick("Executing...", renderer.color_theme(), stdout)?;
+    spinner.tick("Agent is thinking...", renderer.color_theme(), stdout)?;
 
     let messages = vec![Message {
         role: Role::User,
@@ -117,7 +131,7 @@ async fn execute_prompt(
         Err(e) => format!("Execution Error: {}", e),
     };
 
-    spinner.finish("Done", renderer.color_theme(), stdout)?;
+    spinner.finish("Response generated", renderer.color_theme(), stdout)?;
     println!("{}\n", renderer.render_markdown(&response));
     Ok(())
 }
