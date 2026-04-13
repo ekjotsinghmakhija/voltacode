@@ -1,81 +1,65 @@
-// ============================================================================
-// Copyright (c) 2026 Ekjot Singh
-// Contact: ekjotmakhija@gmail.com
-// GitHub: https://github.com/ekjotsinghmakhija
-//
-// Project: Voltacode
-// Description: High-performance intelligent coding agent and terminal UI.
-// ============================================================================
-
-use super::{LlmError, LlmProvider, Message};
-use reqwest::{Client, header};
+use super::{LlmClient, Message, Role};
+use async_trait::async_trait;
+use reqwest::Client;
 use serde_json::json;
+use std::env;
 
 pub struct AnthropicClient {
+    client: Client,
     api_key: String,
     model: String,
-    http_client: Client,
 }
 
 impl AnthropicClient {
-    pub fn new(api_key: String, model: &str) -> Self {
-        let mut headers = header::HeaderMap::new();
-        headers.insert(
-            "x-api-key",
-            header::HeaderValue::from_str(&api_key).expect("Invalid API Key format"),
-        );
-        headers.insert(
-            "anthropic-version",
-            header::HeaderValue::from_static("2023-06-01"),
-        );
-        headers.insert(
-            "content-type",
-            header::HeaderValue::from_static("application/json"),
-        );
-
-        let http_client = Client::builder()
-            .default_headers(headers)
-            .build()
-            .expect("Failed to build HTTP client");
-
+    pub fn new() -> Self {
+        let api_key = env::var("ANTHROPIC_API_KEY").unwrap_or_default();
         Self {
+            client: Client::new(),
             api_key,
-            model: model.to_string(),
-            http_client,
+            model: "claude-3-5-sonnet-20241022".to_string(),
         }
     }
 }
 
-#[async_trait::async_trait]
-impl LlmProvider for AnthropicClient {
-    async fn generate_response(&self, context: &[Message]) -> Result<String, LlmError> {
-        println!("[LLM] Dispatching HTTP request to Anthropic model: {}", self.model);
+#[async_trait]
+impl LlmClient for AnthropicClient {
+    async fn completion(&self, messages: &[Message]) -> Result<String, Box<dyn std::error::Error>> {
+        let formatted_messages: Vec<_> = messages.iter().filter(|m| !matches!(m.role, Role::System)).map(|m| {
+            json!({
+                "role": match m.role {
+                    Role::User => "user",
+                    Role::Assistant => "assistant",
+                    _ => "user",
+                },
+                "content": m.content
+            })
+        }).collect();
+
+        let system_prompt = messages.iter().find(|m| matches!(m.role, Role::System)).map(|m| m.content.clone()).unwrap_or_default();
 
         let payload = json!({
             "model": self.model,
             "max_tokens": 4096,
-            "messages": context
+            "system": system_prompt,
+            "messages": formatted_messages,
         });
 
-        let response = self.http_client
-            .post("https://api.anthropic.com/v1/messages")
+        let resp = self.client.post("https://api.anthropic.com/v1/messages")
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", "2023-06-01")
+            .header("content-type", "application/json")
             .json(&payload)
             .send()
-            .await
-            .map_err(|e| LlmError::Network(e.to_string()))?;
+            .await?;
 
-        if !response.status().is_success() {
-            let err_text = response.text().await.unwrap_or_default();
-            return Err(LlmError::Api(format!("API Error: {}", err_text)));
+        if !resp.status().is_success() {
+            let err_text = resp.text().await?;
+            return Err(format!("API Error: {}", err_text).into());
         }
 
-        // For now, we just acknowledge a successful connection setup.
-        // Full JSON parsing of the Anthropic response block comes in the execution phase.
-        Ok("[LLM] Network Layer connected successfully.".to_string())
-    }
+        let data: serde_json::Value = resp.json().await?;
+        let content = data["content"][0]["text"].as_str().unwrap_or("").to_string();
 
-    async fn stream_response(&self, _context: &[Message]) -> Result<(), LlmError> {
-        println!("[LLM] Opening Server-Sent Events (SSE) stream...");
-        Ok(())
+        Ok(content)
     }
 }

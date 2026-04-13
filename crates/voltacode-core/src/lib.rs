@@ -1,3 +1,3 @@
+pub mod bridge;
 pub mod db;
 pub mod llm;
-pub mod bridge;
