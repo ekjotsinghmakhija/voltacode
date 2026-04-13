@@ -1,4 +1,7 @@
+// crates/voltacode-core/src/llm/mod.rs
 pub mod anthropic;
+pub mod openai;
+
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
