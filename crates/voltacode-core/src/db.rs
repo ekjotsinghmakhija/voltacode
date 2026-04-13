@@ -1,52 +1,35 @@
-// ============================================================================
-// Copyright (c) 2026 Ekjot Singh
-// Contact: ekjotmakhija@gmail.com
-// GitHub: https://github.com/ekjotsinghmakhija
-//
-// Project: Voltacode
-// Description: High-performance intelligent coding agent and terminal UI.
-// ============================================================================
+use crate::llm::Message;
+use std::path::PathBuf;
+use tokio::fs;
 
-use rusqlite::{Connection, Result};
-use std::path::Path;
-
-pub struct VoltacodeDB {
-    conn: Connection,
+pub struct SessionStore {
+    file_path: PathBuf,
 }
 
-impl VoltacodeDB {
-    /// Initializes a new connection to the local SQLite state store.
-    pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let conn = Connection::open(path)?;
-        let db = VoltacodeDB { conn };
-        db.apply_migrations()?;
-        Ok(db)
+impl SessionStore {
+    pub fn new(path: &str) -> Self {
+        Self {
+            file_path: PathBuf::from(path),
+        }
     }
 
-    /// Executes strictly defined structural schema migrations
-    fn apply_migrations(&self) -> Result<()> {
-        self.conn.execute_batch(
-            "
-            PRAGMA journal_mode = WAL;
-            PRAGMA synchronous = NORMAL;
+    pub async fn save(&self, messages: &[Message]) -> Result<(), std::io::Error> {
+        let data = serde_json::to_string_pretty(messages)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
-            CREATE TABLE IF NOT EXISTS sessions (
-                id TEXT PRIMARY KEY,
-                created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL,
-                status TEXT NOT NULL
-            );
+        if let Some(parent) = self.file_path.parent() {
+            fs::create_dir_all(parent).await?;
+        }
+        fs::write(&self.file_path, data).await
+    }
 
-            CREATE TABLE IF NOT EXISTS interactions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL,
-                role TEXT NOT NULL,
-                content TEXT NOT NULL,
-                timestamp INTEGER NOT NULL,
-                FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
-            );
-            ",
-        )?;
-        Ok(())
+    pub async fn load(&self) -> Result<Vec<Message>, std::io::Error> {
+        if !self.file_path.exists() {
+            return Ok(Vec::new());
+        }
+        let data = fs::read_to_string(&self.file_path).await?;
+        let messages = serde_json::from_str(&data)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        Ok(messages)
     }
 }
