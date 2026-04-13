@@ -17,13 +17,13 @@ class ASTChunker:
         print("[ANALYZER] Booting Universal AST Parsers via Python Bridge...")
         self.parser = Parser()
 
-        # Load native language grammars
-        self.LANG_PY = Language(tspython.language())
-        self.LANG_RS = Language(tsrust.language())
+        # Load native language grammars (v0.21 API requires pointer and name)
+        self.LANG_PY = Language(tspython.language(), "python")
+        self.LANG_RS = Language(tsrust.language(), "rust")
 
         print("[ANALYZER] Tree-sitter native bindings loaded successfully.")
 
-    def chunk_file(self, filepath: str):
+    def chunk_file(self, filepath: str) -> list[str]:
         """
         Reads a source file and parses it into an Abstract Syntax Tree (AST).
         """
@@ -46,9 +46,8 @@ class ASTChunker:
 
         tree = self.parser.parse(code)
 
-        # In a later phase, we will traverse `tree.root_node` to extract functions
         print(f"[ANALYZER] AST generated successfully. Root node type: {tree.root_node.type}")
-        return [code.decode('utf-8')] # Placeholder return
+        return [code.decode('utf-8')]
 
 if __name__ == "__main__":
     chunker = ASTChunker()
