@@ -1,6 +1,7 @@
 // crates/voltacode-cli/src/input.rs
 use rustyline::error::ReadlineError;
-use rustyline::{DefaultHistory, Editor};
+use rustyline::history::DefaultHistory;
+use rustyline::Editor;
 use std::io::{self, IsTerminal};
 
 pub enum ReadOutcome {
@@ -16,7 +17,7 @@ pub struct LineEditor {
 
 impl LineEditor {
     pub fn new(prompt: &str) -> Self {
-        let editor = Editor::<(), DefaultHistory>::new().unwrap_or_else(|_| Editor::new().unwrap());
+        let editor = Editor::<(), DefaultHistory>::new().expect("Failed to initialize line editor");
         Self {
             editor,
             prompt: prompt.to_string(),

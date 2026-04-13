@@ -6,17 +6,11 @@ use clap::Parser;
 use dialoguer::{theme::ColorfulTheme, Select};
 use input::{LineEditor, ReadOutcome};
 use render::{Spinner, TerminalRenderer};
-use std::io::{self, Write};
-use voltacode_core::llm::{
-    anthropic::AnthropicClient, ollama::OllamaClient, openai::OpenAiClient, LlmClient, Message,
-    Role,
-};
+use std::io;
+use voltacode_core::llm::{anthropic::AnthropicClient, ollama::OllamaClient, openai::OpenAiClient, LlmClient, Message, Role};
 
 #[derive(Parser, Debug)]
-#[command(
-    name = "voltacode",
-    about = "High-performance intelligent coding agent"
-)]
+#[command(name = "voltacode", about = "High-performance intelligent coding agent")]
 struct Cli {
     /// One-shot prompt to execute without entering REPL
     #[arg(short, long)]
@@ -40,10 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client: Box<dyn LlmClient> = if let Some(provider) = cli.provider {
         match provider.as_str() {
             "openai" => Box::new(OpenAiClient::new()),
-            "ollama" => Box::new(OllamaClient::new(
-                cli.model
-                    .unwrap_or_else(|| "deepseek-coder:6.7b".to_string()),
-            )),
+            "ollama" => Box::new(OllamaClient::new(cli.model.unwrap_or_else(|| "deepseek-coder:6.7b".to_string()))),
             _ => Box::new(AnthropicClient::new()),
         }
     } else {
@@ -70,12 +61,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .items(&local_models)
                     .interact()?;
                 Box::new(OllamaClient::new(local_models[model_idx].to_string()))
-            }
+            },
             _ => unreachable!(),
         }
     };
 
-if let Some(prompt_text) = cli.prompt {
+    if let Some(prompt_text) = cli.prompt {
         execute_prompt(&prompt_text, &*client, &renderer, &mut stdout).await?;
         return Ok(());
     }
