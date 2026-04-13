@@ -4,12 +4,12 @@ use crate::tools::ToolRegistry;
 use tokio::sync::mpsc::Sender;
 
 pub struct AgentBridge<'a> {
-    client: &'a dyn LlmClient,
+    client: &'a (dyn LlmClient + Send + Sync),
     registry: ToolRegistry,
 }
 
 impl<'a> AgentBridge<'a> {
-    pub fn new(client: &'a dyn LlmClient, registry: ToolRegistry) -> Self {
+    pub fn new(client: &'a (dyn LlmClient + Send + Sync), registry: ToolRegistry) -> Self {
         Self { client, registry }
     }
 
@@ -17,22 +17,17 @@ impl<'a> AgentBridge<'a> {
         &self,
         prompt: &str,
         tx: Sender<String>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut messages = vec![Message {
+    ) -> Result<(), String> {
+        let messages = vec![Message {
             role: Role::User,
             content: prompt.to_string(),
         }];
 
         let schemas = self.registry.get_schemas();
-        tx.send(format!(
-            "[System] Agent initialized with {} tools.",
-            schemas.len()
-        ))
-        .await
-        .ok();
+        tx.send(format!("[System] Agent initialized with {} tools.", schemas.len())).await.ok();
 
         // LLM multi-turn execution loop stub
-        let response = self.client.completion(&messages).await?;
+        let response = self.client.completion(&messages).await.map_err(|e| e.to_string())?;
 
         // TODO: Phase 4.1 - Parse response for tool execution schemas
         // self.registry.execute(name, args).await;

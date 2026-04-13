@@ -112,7 +112,9 @@ async fn run_event_loop<B: Backend>(terminal: &mut Terminal<B>, app: &mut AppSta
 
                             let bridge = AgentBridge::new(&client, registry);
 
-                            if let Err(e) = bridge.execute(&prompt, tx_clone.clone()).await {
+                            // Await execution safely, keeping synchronous strings across await points
+                            let exec_result = bridge.execute(&prompt, tx_clone.clone()).await;
+                            if let Err(e) = exec_result {
                                 tx_clone.send(format!("Error: {}", e)).await.ok();
                             }
                         });
