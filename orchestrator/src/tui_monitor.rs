@@ -103,10 +103,14 @@ async fn run_event_loop<B: Backend>(terminal: &mut Terminal<B>, app: &mut AppSta
                         tokio::spawn(async move {
                             let client = AnthropicClient::new();
                             let msg = vec![Message { role: Role::User, content: prompt }];
-                            match client.completion(&msg).await {
-                                Ok(res) => { tx_clone.send(res).await.ok(); },
-                                Err(e) => { tx_clone.send(format!("Error: {}", e)).await.ok(); },
-                            }
+
+                            // Consumes non-Send `e` before the tx_clone await point
+                            let result_msg = match client.completion(&msg).await {
+                                Ok(res) => res,
+                                Err(e) => format!("Error: {}", e),
+                            };
+
+                            tx_clone.send(result_msg).await.ok();
                         });
                     }
                     _ => {}
