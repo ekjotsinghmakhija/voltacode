@@ -11,4 +11,5 @@ serde_json = "1.0"
 thiserror = "1.0"
 tokio = { version = "1.36", features = ["full", "process"] }
 async-trait = "0.1.77"
-reqwest = { version = "0.12", features = ["json", "stream"] }
+# Disable default-tls to bypass OpenSSL, use pure-Rust rustls instead
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
