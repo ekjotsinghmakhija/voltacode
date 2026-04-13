@@ -8,42 +8,48 @@
 # ============================================================================
 
 import os
+import tree_sitter_python as tspython
+import tree_sitter_rust as tsrust
+from tree_sitter import Language, Parser
 
 class ASTChunker:
-    def __init__(self, max_tokens=2000):
-        self.max_tokens = max_tokens
-        print(f"[ANALYZER] Initialized AST Chunker (Max chunk size: {self.max_tokens})")
+    def __init__(self):
+        print("[ANALYZER] Booting Universal AST Parsers via Python Bridge...")
+        self.parser = Parser()
 
-    def chunk_file(self, filepath):
+        # Load native language grammars
+        self.LANG_PY = Language(tspython.language())
+        self.LANG_RS = Language(tsrust.language())
+
+        print("[ANALYZER] Tree-sitter native bindings loaded successfully.")
+
+    def chunk_file(self, filepath: str):
         """
-        Reads a source file and breaks it down into logical closures.
-        (Placeholder for Tree-sitter integration logic)
+        Reads a source file and parses it into an Abstract Syntax Tree (AST).
         """
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"[ANALYZER] Cannot chunk missing file: {filepath}")
 
         print(f"[ANALYZER] Slicing {filepath} into logic-complete closures...")
 
-        # Simplified string-based chunking for initialization phase
-        with open(filepath, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
+        with open(filepath, 'rb') as f:
+            code = f.read()
 
-        chunks = []
-        current_chunk = []
+        # Route to correct grammar based on extension
+        if filepath.endswith('.py'):
+            self.parser.set_language(self.LANG_PY)
+        elif filepath.endswith('.rs'):
+            self.parser.set_language(self.LANG_RS)
+        else:
+            print(f"[ANALYZER] Unsupported extension for {filepath}. Skipping AST.")
+            return []
 
-        for line in lines:
-            current_chunk.append(line)
-            if len(current_chunk) >= 50: # Arbitrary split for now
-                chunks.append("".join(current_chunk))
-                current_chunk = []
+        tree = self.parser.parse(code)
 
-        if current_chunk:
-            chunks.append("".join(current_chunk))
-
-        print(f"[ANALYZER] Produced {len(chunks)} contextual chunks.")
-        return chunks
+        # In a later phase, we will traverse `tree.root_node` to extract functions
+        print(f"[ANALYZER] AST generated successfully. Root node type: {tree.root_node.type}")
+        return [code.decode('utf-8')] # Placeholder return
 
 if __name__ == "__main__":
     chunker = ASTChunker()
-    # Test initialization
-    pass
+    print("[ANALYZER] Extraction engine is ready for ingestion.")
