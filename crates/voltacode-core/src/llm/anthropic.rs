@@ -1,3 +1,4 @@
+// crates/voltacode-core/src/llm/anthropic.rs
 use super::{LlmClient, Message, Role};
 use async_trait::async_trait;
 use reqwest::Client;
@@ -5,9 +6,9 @@ use serde_json::json;
 use std::env;
 
 pub struct AnthropicClient {
-    client: Client,
-    api_key: String,
-    model: String,
+    pub client: Client,
+    pub api_key: String,
+    pub model: String,
 }
 
 impl AnthropicClient {
@@ -61,5 +62,18 @@ impl LlmClient for AnthropicClient {
         let content = data["content"][0]["text"].as_str().unwrap_or("").to_string();
 
         Ok(content)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_client_initialization_parity() {
+        std::env::set_var("ANTHROPIC_API_KEY", "mock_token_0x1");
+        let client = AnthropicClient::new();
+        assert_eq!(client.api_key, "mock_token_0x1");
+        assert_eq!(client.model, "claude-3-5-sonnet-20241022");
     }
 }

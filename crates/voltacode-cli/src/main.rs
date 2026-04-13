@@ -1,12 +1,15 @@
+// crates/voltacode-cli/src/main.rs
 mod render;
 
 use render::{Spinner, TerminalRenderer};
 use std::io::{self, Write};
+use voltacode_core::llm::{anthropic::AnthropicClient, LlmClient, Message, Role};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = TerminalRenderer::new();
     let mut stdout = io::stdout();
+    let client = AnthropicClient::new();
 
     println!("⚡ Voltacode REPL ⚡");
     println!("Type /exit to quit.");
@@ -28,13 +31,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         let mut spinner = Spinner::new();
-        for _ in 0..10 {
-            spinner.tick("Thinking...", renderer.color_theme(), &mut stdout)?;
-            std::thread::sleep(std::time::Duration::from_millis(50));
-        }
+        spinner.tick("Executing...", renderer.color_theme(), &mut stdout)?;
 
-        // Bridge: voltacode_core::llm execution context
-        let response = format!("Processed: {}", trimmed);
+        let messages = vec![Message {
+            role: Role::User,
+            content: trimmed.to_string(),
+        }];
+
+        let response = match client.completion(&messages).await {
+            Ok(res) => res,
+            Err(e) => format!("Execution Error: {}", e),
+        };
 
         spinner.finish("Done", renderer.color_theme(), &mut stdout)?;
         println!("{}\n", renderer.render_markdown(&response));
